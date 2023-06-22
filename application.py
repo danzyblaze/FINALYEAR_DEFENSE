@@ -1,13 +1,17 @@
-from flask import Flask, request
+from flask import Flask, request ,jsonify 
 import boto3
 
 application = Flask(__name__)
 
 
 # Provide your AWS access key and secret key
-AWS_ACCESS_KEY_ID = 'AKIAV73OKPC53LLXSIH6'
-AWS_SECRET_ACCESS_KEY = 'VjdCamJYos3P9x5lZj/un3SUK7xt8fsKkbPMLSNZ'
+AWS_ACCESS_KEY_ID = 'youraccesskeyid'
+AWS_SECRET_ACCESS_KEY = 'yoursecretaccesskey'
 AWS_REGION = 'us-east-1'  # Replace with your desired AWS region
+
+# Global variable to store the last response
+last_response = None
+
 
 def compare_faces_with_s3_reference(s3_bucket, target_image_data):
     # Create a Rekognition client
@@ -16,7 +20,7 @@ def compare_faces_with_s3_reference(s3_bucket, target_image_data):
     # Fetch the reference images from the "Authorized_Persons" folder in S3
     s3 = boto3.resource('s3')
     bucket = s3.Bucket(s3_bucket)
-    
+
     for object_summary in bucket.objects.filter(Prefix='Authorized_Persons/'):
         if object_summary.key.endswith('.jpg') or object_summary.key.endswith('.jpeg'):
             reference_image_object = s3.Object(s3_bucket, object_summary.key)
@@ -51,12 +55,27 @@ def recognize_faces():
     target_image_data = request.files['image'].read()
 
     # Set the S3 bucket for the reference images
-    s3_bucket = 'esp32-rekognition-412011362491'
+    s3_bucket = 'yours3bucket/Authorized_persons/'
 
     # Call the function to compare faces
     result = compare_faces_with_s3_reference(s3_bucket, target_image_data)
 
+    # Store the response in the global variable
+    global last_response
+    last_response = result
+
     return result
 
+
+@application.route('/get_last_response', methods=['GET'])
+def get_last_response():
+    # Check if there is a stored response
+    if last_response == "Authorized: Faces match.":
+        return  "Authorized", 200
+    else:
+        return "Unauthorized", 401
+
+
 if __name__ == '__main__':
-    application.run()
+    # Run the Flask app on your system's IP address
+    application.run(host='192.168.0.102', port=5000)
