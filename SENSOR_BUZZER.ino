@@ -14,6 +14,7 @@ void setup() {
   // lcd.begin(13, 2);
 }
 
+
 float getDistance() {
   digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
