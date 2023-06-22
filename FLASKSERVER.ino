@@ -1,20 +1,22 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <String.h>
 #include <esp_camera.h>
+#define LED_BUILTIN 4
 
 // Replace with your network credentials
 const char* ssid = "ANONYMOUS";
 const char* password = "yamarita";
 
 // Replace with your Flask server IP address or hostname
-const char* serverUrl = " http://localhost:5000/recognize_faces";
+const char* serverUrl = "http://192.168.0.102:5000/get_last_response";
 
 // Pin connected to the lock and buzzer
-const int lockPin = 13;
-const int buzzerPin = 12;
+const int lockPin = 13; //Pin connected to solenoid lock
+const int buzzerPin = 12; //Pin connected to buzzer
+const int triggerPin = 14; // Pin to receive the signal from arduino uno
 
-// Camera settings
-const int cameraCaptureTimeout = 5000;  // Timeout for capturing a photo in milliseconds
+String cmp;
 
 void setup() {
   // Initialize serial communication
@@ -28,7 +30,7 @@ void setup() {
   }
   Serial.println("Connected to WiFi");
 
-  // Configure the camera
+// Configure the camera
   camera_config_t cameraConfig;
   cameraConfig.ledc_channel = LEDC_CHANNEL_0;
   cameraConfig.ledc_timer = LEDC_TIMER_0;
@@ -58,54 +60,75 @@ void setup() {
     return;
   }
 
-  // Set lock and buzzer pins as outputs
+
+  // Set lock, buzzer, and trigger pins as outputs
   pinMode(lockPin, OUTPUT);
   pinMode(buzzerPin, OUTPUT);
+  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(triggerPin, INPUT_PULLUP);
 }
 
 void loop() {
+digitalWrite(lockPin,0);
+digitalWrite(buzzerPin,0); 
+  // Check the state of the trigger pin
+
+  if (digitalRead(triggerPin) == 1) {
+    digitalWrite(LED_BUILTIN,1);
+
   // Take a photo
-  camera_fb_t* fb = NULL;
-  fb = esp_camera_fb_get();
-  if (!fb) {
-    Serial.println("Failed to capture photo");
-    return;
-  }
-
-  // Create a HTTPClient object
-  HTTPClient http;
-  
-  // Send POST request with the photo to the server
-  http.begin(serverUrl);
-  http.addHeader("Content-Type", "image/jpeg");
-  int httpResponseCode = http.POST((uint8_t*)fb->buf, fb->len);
-  
-  // Check the response from the server
-  if (httpResponseCode == HTTP_CODE_OK) {
-    String response = http.getString();
-    Serial.println("Response: " + response);
-    
-    // Check if the response is authorized or unauthorized
-    if (response == "Authorized: Faces match.") {
-      digitalWrite(lockPin, HIGH);   // Trigger the lock
-      delay(3000);                   // Lock for 3 seconds
-      digitalWrite(lockPin, LOW);    // Release the lock
-    } else {
-      digitalWrite(buzzerPin, HIGH); // Trigger the buzzer
-      delay(3000);                   // Buzz for 3 seconds
-      digitalWrite(buzzerPin, LOW);  // Stop buzzing
+    camera_fb_t* fb = NULL;
+    fb = esp_camera_fb_get();
+    if (!fb) {
+      Serial.println("Failed to capture photo");
+      return;
     }
-  } else {
-    Serial.print("Error: ");
+    // Create a HTTPClient object
+    HTTPClient http;
+    
+      // Send POST request with the photo to the server
+    http.begin(serverUrl);
+    http.addHeader("Content-Type", "image/jpeg");
+    int httpResponseCode = http.POST((uint8_t*)fb->buf, fb->len);
+    // Send GET request to the server
+    http.begin(serverUrl);
+    int httpResponseCode = http.GET();
     Serial.println(httpResponseCode);
-  }
-  
-  // Free the memory used by the photo buffer
-  esp_camera_fb_return(fb);
-  
-  // End the HTTP request
-  http.end();
 
-  // Delay before taking the next photo
-  delay(5000);
+    // Check the response from the server
+    if (httpResponseCode == HTTP_CODE_OK) {
+      // String response = http.getString();
+      // Serial.println("Response: " + response);
+      // cmp = String("{\"response\":\"Authorized: Faces match.\"}");
+      // Serial.println(response);
+      // Serial.println(cmp);
+      // // Check if the response is authorized or unauthorized
+      // if (cmp.equals(cmp)) {
+      
+        Serial.println("ACCESS IS GRANTED "); 
+        digitalWrite(lockPin,1);   // Trigger the lock
+        delay(3000);                   // Lock for 3 seconds
+        digitalWrite(lockPin,0); // Release the lock
+         
+      // } 
+    }else {
+        Serial.println("ACCESS IS NOT-GRANTED "); 
+        digitalWrite(lockPin,0);
+        delay(3000); 
+        digitalWrite(buzzerPin,1); // Trigger the buzzer
+        delay(3000);                   // Buzz for 3 seconds
+        digitalWrite(buzzerPin,0); // Stop buzzing
+       
+      } 
+    // Free the memory used by the photo buffer
+    esp_camera_fb_return(fb);
+    // End the HTTP request
+    http.end();
+
+    // Delay before sending the next request
+    delay(5000);
+  } else {
+    digitalWrite(LED_BUILTIN,0); // Code does nothing and switches off the LED when shouldRunCode is false
+    delay(1000); //delay by 1 second
+  }
 }
