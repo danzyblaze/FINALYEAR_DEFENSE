@@ -1,8 +1,8 @@
 import requests
 
-target_image_path = "C:\\Users\\Administrator\\Downloads\\damie.jpg"
-#target_image_path = "/home/anonymous/Documents/damie.jpg"
-url = 'http://localhost:5000/recognize_faces'
+target_image_path = "PATH TO  TARGET IMAGE"
+
+url = 'http://192.168.0.102:5000/recognize_faces'
 
 with open(target_image_path, 'rb') as image_file:
     files = {'image': image_file}
